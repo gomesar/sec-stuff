@@ -58,7 +58,7 @@ void hello(const char* input) {
   */
   walk(&local+3, 40);
 
-  /* I tryied with scanf(), does not work properly (at least until I tried)
+  /* I tried with scanf(), does not work properly,
    * and it is a good point to know why. Seacrh for differences in how the data
    * come up with scanf() and strcpy().
   */
@@ -69,14 +69,14 @@ void hello(const char* input) {
   printf("%04hhx\n", local);
 }
 
-/* That is the goal */
+/* This is the goal */
 void hidden(){
 	printf("\n[!] Correct overflow.\n");
 }
 
 int main(int argc, char *argv[], char *envp[]) {  
   printf("Address of main is   %p\n", main);
-  printf("Address of hidden is %p\n\n", hidden); // And that is the shortcut
+  printf("Address of hidden is %p\n\n", hidden); // And this is the shortcut
   hello(argv[1]);
   
   printf("[!] Returned to main.\n"); // Dont fall here
