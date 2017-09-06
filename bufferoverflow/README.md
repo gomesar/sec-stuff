@@ -1,13 +1,22 @@
 ## How to:
+1. Setup
+
+1.1 automatically (with `sudoers` permissions):
 ```
-# ./compile.sh
+$ ./compile.sh
 ```
-or (after turn off Address Space Layout Randomization (ASLR) putting '0' in '/proc/sys/kernel/randomize_va_space') *:
+1.2 Manually:
+
+- Turn `OFF` Address Space Layout Randomization (ASLR)*
+```
+# echo 0 | tee /proc/sys/kernel/randomize_va_space
+```
+- Compile without stack protection
 ```
 $ gcc stackoverflow.c -o exec -fno-stack-protector
 ```
 
-play with it:
+2. Play with it:
 ```
 $ ./exec whereami
 ```
