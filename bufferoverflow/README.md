@@ -1,7 +1,9 @@
+This folder contains stack overflow exploration materials, including a `C` code, and instructions of how perform an illustrative attack. In this, the goal is to execute the [`hidden()`](https://github.com/gomesar/sec-stuff/blob/master/bufferoverflow/stackoverflow.c#L73) function, which was declared but not originally called.
+
 ## How to:
 1. Setup
 
-1.1 automatically (with `sudoers` permissions):
+1.1 Automatically (with `sudoers` permissions):
 ```
 $ ./compile.sh
 ```
