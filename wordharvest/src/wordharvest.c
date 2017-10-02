@@ -30,7 +30,8 @@
 
 #define CHECK_CODE 1009
 #define SIZE 2048
-#define DEBUG 1
+//#define DEBUG 1
+#define VERBOSE 1
 
 char *wlist[SIZE];
 char c = ' ';
@@ -158,28 +159,46 @@ int main(int argc, char **argv) {
 	if (check != CHECK_CODE) {
 		usage_error(argv[0]);
 	}
-	#ifdef DEBUG
-	printf("Searching on: %s.\nFor extensions: %s.\nOutput file: %s.\n", find_path, extensions, file_out);
+	#ifdef VERBOSE
+	printf("Searching on: %s.\nFor extensions: %s.\nOutput file: %s.\n\n", find_path, extensions, file_out);
 	#endif
 	
 	/* Starting the real process */
 	char *param_regex = get_regex(extensions);
 	// Find files
 	FILE *fp;
-	char path[1035];
+	char resp[1024];
 
 	/* Open the command for reading. */
 	char command[128];
 	sprintf(command, "find %s -type f %s", find_path, param_regex);
 	fp = popen(command, "r");
 	if (fp == NULL) {
-		printf("Failed to run command\n");
+		printf("[!] Failed to run 'find'.\n");
 		exit(1);
 	}
 
-	/* Read the output a line at a time - output it. */
-	while (fgets(path, sizeof(path)-1, fp) != NULL) {
-		printf("%s", path);
+	/* For each file */
+	while (fgets(resp, sizeof(resp)-1, fp) != NULL) {
+		char* path;
+		
+		path = strtok(resp, "\n");
+		do {
+			printf("%s", path);
+			
+			int c;
+			FILE *file;
+			file = fopen(path, "r");
+			
+			if (file) {
+				printf("\n\t[!] Reading.\n\t");
+				while ((c = getc(file)) != EOF)
+					putchar(c);
+				
+				fclose(file);
+				printf("\n");
+			}
+		} while (path = strtok(NULL, "\n"));
 	}
 
 	/* close */
