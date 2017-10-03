@@ -32,20 +32,158 @@
 
 #define CHECK_CODE 1009
 #define SIZE 2048
+#define BOOK_SIZE 128
 //#define DEBUG 1
 #define VERBOSE 1
 
 FILE *fout;
 char *wlist[SIZE];
+char **book[BOOK_SIZE];
 char c = ' ';
 char tmp_word[128];
-short int wl_size = 0;
+short wl_size = 0, b_pages=0;
+void *hack;
+
+
+void usage_error(char* program) {
+	fprintf(stderr, "Usage: %s -d directory/ -o output/file [-e ext1:ext2]\n", program);
+	exit(1);
+}
+
+
+void safe_exit() {
+	int i, j;
+	
+	for (i=0; i < wl_size; i++) {
+		free(wlist[i]);
+	}
+	
+	for (i=0; i < b_pages; i++) {
+		//char **tmp = book[i];
+		
+		for (j=0; j<SIZE; j++) {
+			free(book[j]);
+		}
+	}
+	
+	fclose(fout);
+}
 
 
 void initialize_wlist() {
 	int i;
 	for (i=0; i<SIZE; i++) {
 		wlist[i] = NULL;
+	}
+}
+
+
+void print_list() {
+	int i;
+	printf("##############################\n# Word List:");
+	for (i=0; i<wl_size; i++) {
+		if (i % 5 ==0) {
+			printf("\n# %s ", wlist[i]);
+		} else {
+			printf("%s ", wlist[i]);
+		}
+	}
+	printf("\n##############################\n");
+}
+
+
+int cmpfunc(const void *a, const void *b) {
+	const char **ia = (const char **)a;
+    const char **ib = (const char **)b;
+    /* strcmp functions works exactly as expected from comparison
+     * function
+     */ 
+    
+    return strcmp(*ia, *ib);
+}
+
+
+int create_book_page() {
+	if (b_pages == BOOK_SIZE) {
+		printf("[!] FATAL ERROR: BOOK_SIZE insufficient!\n");
+		safe_exit();
+		exit(1);
+	}
+	
+	printf("[!] Creating new book page n %d. (%d) \n", b_pages, (int) sizeof(wlist));
+	char **page = (char**) malloc(sizeof(wlist) );
+	hack = page;
+	
+	book[b_pages++] = page;
+	#ifdef DEBUG
+	print_list();
+	#endif
+	qsort(wlist, SIZE, sizeof(char *), cmpfunc);
+	#ifdef VERBOSE
+	print_list();
+	#endif
+	int j;
+	for (j=0; j<SIZE; j++) {
+		page[j] = wlist[j];
+	}
+	
+	//printf("TEST: %s...%s\n", page[0], page[SIZE-1]);
+	// restart word list
+	wl_size = 0;
+	// memset(wlist, 0, sizeof wlist);
+}
+
+
+int count_word(char* word) {
+	int i;
+	char** item;
+	
+	for (i=0; i<b_pages; i++) {
+		#ifdef DEBUG
+		printf("\tStack: %p\n", &wlist);
+		printf("\thack : %p\n", hack);
+		printf("\tpage : %p (%s)\n", book[i], (char*) *book[i]);
+		printf("Looking at Book page %d.\n", i);
+		#endif
+		
+		item = (char**) bsearch (&word, book[i], SIZE, sizeof(char *), cmpfunc);
+		if( item != NULL ) {
+			#ifdef DEBUG
+			printf("Found item = %s.\n", *item);
+			#endif
+			return 1;
+		}
+	}
+	
+	for (i=0; i<wl_size; i++) {
+		#ifdef DEBUG //-------------------------------------------------
+		printf("Comparing: [%s] with [%s].\n", word, wlist[i]);
+		#endif //-------------------------------------------------------
+		
+		if (strcmp(word, wlist[i]) == 0) {
+			//printf("Already used.\n");
+			return 1;
+		}
+	}
+	#ifdef VERBOSE //---------------------------------------------------
+	printf("Adding [%s] to list.\n", word);
+	#endif //-----------------------------------------------------------
+	
+	// add to list and write to file
+	wlist[wl_size++] = word;
+	
+	if (wl_size == SIZE ) {
+		create_book_page();
+	}
+	
+	// TODO: File
+	if (fout) {
+		fputs(word, fout);
+		fputs("\n", fout);
+		
+		return 0;
+	} else {
+		return -1;
 	}
 }
 
@@ -80,49 +218,10 @@ char* get_regex(char *ext_list){
 	
 	return param_regex;
 }
-
-
-int count_word(char* word) {
-	int i;
-	char new_line = '\n';
-	
-	for (i=0; i<wl_size; i++) {
-		#ifdef DEBUG //-------------------------------------------------
-		printf("Comparing: [%s] with [%s].\n", word, wlist[i]);
-		#endif //-------------------------------------------------------
-		
-		if (strcmp(word, wlist[i]) == 0) {
-			printf("Already used.\n");
-			return 0;
-		}
-	}
-	#ifdef DEBUG //-----------------------------------------------------
-	printf("Adding [%s] to list.\n", word);
-	#endif //-----------------------------------------------------------
-	
-	// add to list and write to file
-	wlist[wl_size++] = word;
-	// TODO: File
-	if (fout) {
-		fputs(word, fout);
-		fputs("\n", fout);
-	}
-	
-	
-	return 1;
-}
-
-
 /* =====================================================================
  * =====================================================================
  * =========================== Main
  */
-
-
-void usage_error(char* program) {
-	fprintf(stderr, "Usage: %s -d directory/ -o output/file [-e ext1:ext2]\n", program);
-	exit(1);
-}
 
 
 int main(int argc, char **argv) {
@@ -223,7 +322,9 @@ int main(int argc, char **argv) {
 							char* new_word = (char *) malloc(sizeof(char) * (bf_len+1));
 							strcpy(new_word, buffer);
 							new_word[bf_len+1] = '\0';
+							#ifdef DEBUG
 							printf("[!] New word: %s\n", new_word);
+							#endif
 							
 							count_word(new_word);
 							memset(buffer, 0, sizeof buffer);
@@ -244,7 +345,9 @@ int main(int argc, char **argv) {
 	}
 	/* close */
 	pclose(fp);
-	fclose(fout);
+	
+	/* free */
+	safe_exit();
 	
 	return 0;
 }
