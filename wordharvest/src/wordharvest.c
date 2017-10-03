@@ -104,8 +104,8 @@ int count_word(char* word) {
 	wlist[wl_size++] = word;
 	// TODO: File
 	if (fout) {
-		fwrite(word, sizeof(char), sizeof(word), fout);
-		fwrite(&new_line, sizeof(char), sizeof(new_line), fout);
+		fputs(word, fout);
+		fputs("\n", fout);
 	}
 	
 	
