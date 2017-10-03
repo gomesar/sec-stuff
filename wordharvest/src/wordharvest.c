@@ -26,13 +26,16 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <ctype.h>
 
+#include <unistd.h>
 
 #define CHECK_CODE 1009
 #define SIZE 2048
 //#define DEBUG 1
 #define VERBOSE 1
 
+FILE *fout;
 char *wlist[SIZE];
 char c = ' ';
 char tmp_word[128];
@@ -45,6 +48,7 @@ void initialize_wlist() {
 		wlist[i] = NULL;
 	}
 }
+
 
 char* get_regex(char *ext_list){
 	char *param_regex = (char *) malloc(sizeof(char) * 64);
@@ -80,6 +84,8 @@ char* get_regex(char *ext_list){
 
 int count_word(char* word) {
 	int i;
+	char new_line = '\n';
+	
 	for (i=0; i<wl_size; i++) {
 		#ifdef DEBUG //-------------------------------------------------
 		printf("Comparing: [%s] with [%s].\n", word, wlist[i]);
@@ -97,6 +103,11 @@ int count_word(char* word) {
 	// add to list and write to file
 	wlist[wl_size++] = word;
 	// TODO: File
+	if (fout) {
+		fwrite(word, sizeof(char), sizeof(word), fout);
+		fwrite(&new_line, sizeof(char), sizeof(new_line), fout);
+	}
+	
 	
 	return 1;
 }
@@ -164,53 +175,76 @@ int main(int argc, char **argv) {
 	#endif
 	
 	/* Starting the real process */
-	char *param_regex = get_regex(extensions);
 	// Find files
 	FILE *fp;
 	char resp[1024];
-
-	/* Open the command for reading. */
 	char command[128];
+	char *param_regex = get_regex(extensions);
 	sprintf(command, "find %s -type f %s", find_path, param_regex);
+	
 	fp = popen(command, "r");
 	if (fp == NULL) {
 		printf("[!] Failed to run 'find'.\n");
 		exit(1);
 	}
 
-	/* For each file */
+	// Open output file
+	fout = fopen(file_out, "a+");
+	
+	/* For each file returned by find command */
 	while (fgets(resp, sizeof(resp)-1, fp) != NULL) {
 		char* path;
-		
+		size_t bf_len;
 		path = strtok(resp, "\n");
+		
 		do {
-			printf("%s", path);
+			printf("%s\n", path);
+			char buffer[64] = {'\0'};
 			
-			int c;
+			char c;
+			
 			FILE *file;
 			file = fopen(path, "r");
 			
 			if (file) {
+				#ifdef DEBUG //-----------------------------------------
 				printf("\n\t[!] Reading.\n\t");
-				while ((c = getc(file)) != EOF)
-					putchar(c);
+				#endif //-----------------------------------------------
+				while ((c = getc(file)) != EOF) {
+					bf_len = strlen(buffer);
+					
+					#ifdef DEBUG //-------------------------------------
+					printf("(%d) %s ", (int) bf_len, buffer);
+					#endif //-------------------------------------------
+					
+					if (!isalnum(c)) {
+						
+						if (bf_len > 0) {
+							char* new_word = (char *) malloc(sizeof(char) * (bf_len+1));
+							strcpy(new_word, buffer);
+							new_word[bf_len+1] = '\0';
+							printf("[!] New word: %s\n", new_word);
+							
+							count_word(new_word);
+							memset(buffer, 0, sizeof buffer);
+						}
+						// putchar(c);
+					} else {
+						buffer[bf_len] = c;
+					}
+				}
 				
 				fclose(file);
-				printf("\n");
+				#ifdef DEBUG //-----------------------------------------
+				printf("[!] Closed.\n");
+				#endif //-----------------------------------------------
+				//sleep(1);
 			}
 		} while (path = strtok(NULL, "\n"));
 	}
-
 	/* close */
 	pclose(fp);
-
-
-	char test[32] = "Teste";
-	count_word(test);
+	fclose(fout);
 	
-	
-		// Find terms
-	 
 	return 0;
 }
-
