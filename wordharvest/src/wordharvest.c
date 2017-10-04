@@ -31,11 +31,17 @@
 #include <unistd.h>
 
 #define CHECK_CODE 1009
-#define SIZE 2048
-#define BOOK_SIZE 128
+#define SIZE 4096
+#define BOOK_SIZE 512
 //#define DEBUG 1
 #define VERBOSE 1
 
+
+/*
+ * book[i] = page		book	= **char
+ * page[j] = word		page	= *char
+ * word[k] = letter		letter	= char
+ */
 FILE *fout;
 char *wlist[SIZE];
 char **book[BOOK_SIZE];
@@ -52,26 +58,43 @@ void usage_error(char* program) {
 
 
 void safe_exit() {
+	//printf("[!] Entering safe exit.\n");
+	
 	int i, j;
 	
 	for (i=0; i < wl_size; i++) {
 		free(wlist[i]);
 	}
 	
+	//printf("[!] Releasing book.\n");
+	
 	for (i=0; i < b_pages; i++) {
-		//char **tmp = book[i];
+		// For each page
+		char **page = book[i];
 		
 		for (j=0; j<SIZE; j++) {
-			free(book[j]);
+			#ifdef DEBUG
+			printf("Book[%d]. Word: %s.\n", i, page[j]);
+			#endif
+			free(page[j]);
 		}
+		free(book[i]);
 	}
 	
 	fclose(fout);
+	
+	#ifdef VERBOSE
+	printf("[!] Safe exit done.\n");
+	#endif
+	
+	// Random information print
+	//printf("\n[!] Size: %d.\n", (int) sizeof(char***));
 }
 
 
 void initialize_wlist() {
 	int i;
+	
 	for (i=0; i<SIZE; i++) {
 		wlist[i] = NULL;
 	}
@@ -80,6 +103,7 @@ void initialize_wlist() {
 
 void print_list() {
 	int i;
+	
 	printf("##############################\n# Word List:");
 	for (i=0; i<wl_size; i++) {
 		if (i % 5 ==0) {
@@ -106,11 +130,11 @@ int cmpfunc(const void *a, const void *b) {
 int create_book_page() {
 	if (b_pages == BOOK_SIZE) {
 		printf("[!] FATAL ERROR: BOOK_SIZE insufficient!\n");
-		safe_exit();
-		exit(1);
+		
+		return -1;
 	}
 	
-	printf("[!] Creating new book page n %d. (%d) \n", b_pages, (int) sizeof(wlist));
+	printf("[!] Creating new book page n %d. (%d entries, %d bytes) \n", b_pages, SIZE, (int) sizeof(wlist));
 	char **page = (char**) malloc(sizeof(wlist) );
 	hack = page;
 	
@@ -131,6 +155,8 @@ int create_book_page() {
 	// restart word list
 	wl_size = 0;
 	// memset(wlist, 0, sizeof wlist);
+	
+	return 0;
 }
 
 
@@ -151,6 +177,8 @@ int count_word(char* word) {
 			#ifdef DEBUG
 			printf("Found item = %s.\n", *item);
 			#endif
+			
+			free(word);
 			return 1;
 		}
 	}
@@ -162,6 +190,7 @@ int count_word(char* word) {
 		
 		if (strcmp(word, wlist[i]) == 0) {
 			//printf("Already used.\n");
+			free(word);
 			return 1;
 		}
 	}
@@ -173,7 +202,9 @@ int count_word(char* word) {
 	wlist[wl_size++] = word;
 	
 	if (wl_size == SIZE ) {
-		create_book_page();
+		if (create_book_page() < 0){
+			return -1;
+		}
 	}
 	
 	// TODO: File
@@ -280,6 +311,7 @@ int main(int argc, char **argv) {
 	char command[128];
 	char *param_regex = get_regex(extensions);
 	sprintf(command, "find %s -type f %s", find_path, param_regex);
+	free(param_regex);
 	
 	fp = popen(command, "r");
 	if (fp == NULL) {
@@ -289,9 +321,10 @@ int main(int argc, char **argv) {
 
 	// Open output file
 	fout = fopen(file_out, "a+");
+	short error = 1;
 	
 	/* For each file returned by find command */
-	while (fgets(resp, sizeof(resp)-1, fp) != NULL) {
+	while (fgets(resp, sizeof(resp)-1, fp) != NULL && error != 0) {
 		char* path;
 		size_t bf_len;
 		path = strtok(resp, "\n");
@@ -321,12 +354,15 @@ int main(int argc, char **argv) {
 						if (bf_len > 0) {
 							char* new_word = (char *) malloc(sizeof(char) * (bf_len+1));
 							strcpy(new_word, buffer);
-							new_word[bf_len+1] = '\0';
+							new_word[bf_len] = '\0';
 							#ifdef DEBUG
 							printf("[!] New word: %s\n", new_word);
 							#endif
 							
-							count_word(new_word);
+							if (count_word(new_word) < 0) {
+								error = 0; // True
+								break;
+							}
 							memset(buffer, 0, sizeof buffer);
 						}
 						// putchar(c);
