@@ -1,4 +1,5 @@
 /*
+/*
  * bruteforce.c
  * 
  * Copyright (c) 2017 A Gomes <agomes@lasca.ic.unicamp.br>
@@ -20,7 +21,8 @@
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
- * 
+ *
+ * bruteforce -l <wordlist> -f <file.zip>
  */
 
 #include <stdio.h>
@@ -33,10 +35,9 @@
 #define MAX_PWD_LEN 63
 
 
-int file_exist (char *filename)
-{
-  struct stat buffer;   
-  return (stat (filename, &buffer) == 0);
+void usage_error(char* program) {
+	fprintf(stderr, "Usage: %s -f file.zip -l wordlist.txt\n", program);
+	exit(1);
 }
 
 
@@ -173,11 +174,8 @@ int main(int argc, char **argv)
 		}
 	}
 	
+	printf("The password is %s", password);
 	
-	
-	printf("The password is %s\n", password);
-	
-	//
 	return 0;
 }
 
