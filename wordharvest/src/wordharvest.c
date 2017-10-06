@@ -21,6 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  * 
+ * wordharvest [-d /tmp/] [-o words_tmp] [opt: -e txt:text:asc] -v [0|1|2|9]
  */
 
 
@@ -29,15 +30,18 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <ctype.h>
-
 #include <unistd.h>
 
+//#define DEBUG 1
 #define CHECK_CODE 1009
 #define SIZE 4096
 #define BOOK_SIZE 512
 #define PWD_BUFFER_SIZE 127
-//#define DEBUG 1
-//#define VERBOSE 1
+#define SHOW_FILES 1
+#define SHOW_WORDS 2
+#define SHOW_ALL 9
+
+int VERBOSE = 0;
 
 
 /*
@@ -54,7 +58,7 @@ short wl_size = 0, b_pages=0;
 
 
 void usage_error(char* program) {
-	fprintf(stderr, "Usage: %s -d directory/ -o output/file [-e ext1:ext2]\n", program);
+	fprintf(stderr, "Usage: %s -d directory/ -o output/file [-e ext1:ext2] -v[1|2|9]\n", program);
 	exit(1);
 }
 
@@ -85,9 +89,9 @@ void safe_exit() {
 	
 	fclose(fout);
 	
-	#ifdef VERBOSE
-	printf("[!] Safe exit done.\n");
-	#endif
+	if (VERBOSE >= SHOW_FILES) {
+		printf("[!] Safe exit done.\n");
+	}
 	
 	// Random information print
 	//printf("\n[!] Size: %d.\n", (int) sizeof(char***));
@@ -144,9 +148,9 @@ int create_book_page() {
 	print_list();
 	#endif
 	qsort(wlist, SIZE, sizeof(char *), cmpfunc);
-	#ifdef VERBOSE
-	print_list();
-	#endif
+	if (VERBOSE >= SHOW_ALL) {
+		print_list();
+	}
 	int j;
 	for (j=0; j<SIZE; j++) {
 		page[j] = wlist[j];
@@ -194,9 +198,9 @@ int count_word(char* word) {
 			return 1;
 		}
 	}
-	#ifdef VERBOSE //---------------------------------------------------
-	printf("Adding [%s] to list.\n", word);
-	#endif //-----------------------------------------------------------
+	if (VERBOSE >= SHOW_WORDS) {
+		printf("Adding [%s] to list.\n", word);
+	}
 	
 	// add to list and write to file
 	wlist[wl_size++] = word;
@@ -278,6 +282,9 @@ int main(int argc, char **argv) {
 			if (strcmp(argv[i], "-e") == 0) { /* Process optional arguments. */
 			       i++;
 			       strcpy(extensions, argv[i]);  /* Convert string to int. */
+			} else if (strcmp(argv[i], "-v") == 0) {
+					i++;
+					VERBOSE = (int) strtol(argv[i], NULL, 10);
 			} else {
 				/* Process non-optional arguments here. */
 				if (strcmp(argv[i], "-d") == 0) {
@@ -300,9 +307,9 @@ int main(int argc, char **argv) {
 	if (check != CHECK_CODE) {
 		usage_error(argv[0]);
 	}
-	#ifdef VERBOSE
-	printf("Searching on: %s.\nFor extensions: %s.\nOutput file: %s.\n\n", find_path, extensions, file_out);
-	#endif
+	if (VERBOSE >= SHOW_FILES) {
+		printf("Searching on: %s.\nFor extensions: %s.\nOutput file: %s.\n\n", find_path, extensions, file_out);
+	}
 	
 	/* Starting the real process */
 	// Find files
@@ -330,9 +337,9 @@ int main(int argc, char **argv) {
 		path = strtok(resp, "\n");
 		
 		do {
-			#ifdef VERBOSE
-			printf("\"%s\"\n", path);
-			#endif
+			if (VERBOSE >= SHOW_FILES) {
+				printf("%s\n", path);
+			}
 			char buffer[PWD_BUFFER_SIZE] = {'\0'};
 			
 			char c;
