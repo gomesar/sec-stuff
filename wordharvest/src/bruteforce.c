@@ -1,5 +1,4 @@
 /*
-/*
  * bruteforce.c
  * 
  * Copyright (c) 2017 A Gomes <agomes@lasca.ic.unicamp.br>
@@ -21,7 +20,7 @@
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
- *
+ * 
  * bruteforce -l <wordlist> -f <file.zip>
  */
 
@@ -128,8 +127,9 @@ int main(int argc, char **argv)
 		usage_error(argv[0]);
 	}
 	
+	#ifdef DEBUG
 	printf("wordlist: %s.\nzip_path: %s.\n", wordlist, zip_path);
-	
+	#endif
 	
 	/*
 	 * Real process
@@ -138,7 +138,7 @@ int main(int argc, char **argv)
 	int pass_found = 0;
 	FILE *fp, *fwl;	// file_pipe, file_wordlist
 	size_t len = 0;
-	char resp[1024], pre_command[256], command[512];
+	char resp[1024], pre_command[MAX_PWD_LEN+256], command[MAX_PWD_LEN+512];
 	char tmp_pwd[MAX_PWD_LEN+1];
 	fwl = fopen(wordlist, "r");
 	size_t prec_len = strlen(pre_command);
@@ -149,13 +149,17 @@ int main(int argc, char **argv)
 	} else {
 		sprintf(pre_command, "unzip -P %%s -o %s -d /tmp/ 2>&1", zip_path);
 		
+		// Line read
 		while (fgets(tmp_pwd, MAX_PWD_LEN, fwl) != NULL) {
 			len = strlen(tmp_pwd);
 			
 			if (len > 512 - prec_len - 1) { // Another safe check
-				fprintf(stderr, "Too large password found.\n");
-				exit(1);
-			} else if (len > 0 && strcmp(" ", tmp_pwd) !=0 ){
+				fprintf(stderr, "[!] Too large passphrase or zip file path.\n");
+				//exit(1);
+			} if (len == MAX_PWD_LEN-1) {
+				fprintf(stderr, "[!] ALERT! passphrase could be greater than MAX_PWD_LEN\n");
+			} else if (len > 0 && strcmp(" ", tmp_pwd) !=0 ){ // Simple check
+				
 				strncpy(password, tmp_pwd, len-1);
 				password[len-1] = '\0';
 				
@@ -168,16 +172,13 @@ int main(int argc, char **argv)
 				fp = popen(command, "r");
 				if (fp == NULL) {
 					fprintf(stderr, "[!] Failed to run '%s'.\n", command);
-					break;
+					//break;
 					//fclose(fwl);
-					//exit(1);
 				}
 				
-				//printf("\tResponse: %s", resp);
-				//printf("\tResponse: %s", resp);
 				if (check_success(fp) == 1) {
 					#ifdef DEBUG
-					printf("[!] GOT!\n");
+					printf("[!] GOT IT!\n");
 					#endif
 					pass_found = 1;
 					break;
@@ -185,8 +186,8 @@ int main(int argc, char **argv)
 				
 				//free(tmp_pwd);
 			} else {
-				fprintf(stderr, "Empty password found.\n");
-				exit(1);
+				fprintf(stderr, "[!] Empty passphrase found.\n");
+				//break;
 			}
 		}
 	}
