@@ -32,7 +32,7 @@
 
 //#define DEBUG 1
 #define CHECK_CODE 1009
-#define MAX_PWD_LEN 63
+#define MAX_PWD_LEN 127
 
 
 void usage_error(char* program) {
@@ -47,45 +47,49 @@ int check_success(FILE *response){
 	}
 	char skipping_token[9]	= "skipping:";
 	char error_token[18]	= "incorrect password";
-	int s=0, e=0;
+	char success_token[10] 	= "extracting";
+	int s=0, e=0, k=0, success_flag=0;
 	char c;
 	
 	while( (c = getc(response)) != EOF) {
-		//printf("%c", c);
+		//printf("%c", c);	// HEAVY debug
 		
 		
 		if (c == skipping_token[s]) {
-			#ifdef DEBUG
-			if (s==0) printf("[");
-			printf("%c", c);
-			if (s==8) printf("]\n");
-			#endif
 			s++;
 			if (s == 9) return 0;
 		} else {
-			#ifdef DEBUG
-			if (s>0) printf("] ");
-			#endif
 			s = 0;
 		}
 		
 		if (c == error_token[e]) {
-			#ifdef DEBUG
-			if (e==0) printf("[");
-			printf("%c", c);
-			if (e==17) printf("]\n");
-			#endif
 			e++;
 			if (e == 18) return 0;
 		} else {
-			#ifdef DEBUG
-			if (e>0) printf("] ");
-			#endif
 			e = 0;
+		}
+		
+		if (c == success_token[k]) {
+			k++;
+			if (k == 10) success_flag = 1;
+		} else {
+			k = 0;
 		}
 	}
 	
-	return 1;
+	/*
+	 * Only return 1 if success_token was found AND
+	 * (NO skipping OR error) tokens was present.
+	 * 
+	 */
+	//printf("Success flag[%d]\n", success_flag);
+	if (success_flag) {
+		return 1;
+	} else {
+		fprintf(stderr, "Unexpected zip response.\n");
+		return -1;
+	}
+	
 }
 
 
@@ -123,19 +127,21 @@ int main(int argc, char **argv)
 	if (check != CHECK_CODE) {
 		usage_error(argv[0]);
 	}
-	#ifdef DEBUG
+	
 	printf("wordlist: %s.\nzip_path: %s.\n", wordlist, zip_path);
-	#endif
+	
 	
 	/*
 	 * Real process
 	 */
 	char password[MAX_PWD_LEN];
+	int pass_found = 0;
 	FILE *fp, *fwl;	// file_pipe, file_wordlist
 	size_t len = 0;
 	char resp[1024], pre_command[256], command[512];
 	char tmp_pwd[MAX_PWD_LEN+1];
 	fwl = fopen(wordlist, "r");
+	size_t prec_len = strlen(pre_command);
 	
 	if (fwl == NULL) {
 		fprintf(stderr, "[!] Unable to open file \"%s\".\n", wordlist);
@@ -143,38 +149,49 @@ int main(int argc, char **argv)
 	} else {
 		sprintf(pre_command, "unzip -P %%s -o %s -d /tmp/ 2>&1", zip_path);
 		
-		while (fgets(tmp_pwd, MAX_PWD_LEN+1, fwl) != NULL) {
+		while (fgets(tmp_pwd, MAX_PWD_LEN, fwl) != NULL) {
 			len = strlen(tmp_pwd);
-			strncpy(password, tmp_pwd, len-1);
-			password[len-1] = '\0';
 			
-			//printf("tmp_pwd: %s\n", password);
-			sprintf(command, pre_command, password);
-			#ifdef DEBUG
-			printf("CMD: %s\n", command);
-			#endif
-			
-			fp = popen(command, "r");
-			if (fp == NULL) {
-				fprintf(stderr, "[!] Failed to run '%s'.\n", command);
-				fclose(fwl);
+			if (len > 512 - prec_len - 1) { // Another safe check
+				fprintf(stderr, "Too large password found.\n");
+				exit(1);
+			} else if (len > 0 && strcmp(" ", tmp_pwd) !=0 ){
+				strncpy(password, tmp_pwd, len-1);
+				password[len-1] = '\0';
+				
+				//printf("tmp_pwd: %s\n", password);
+				sprintf(command, pre_command, password);
+				#ifdef DEBUG
+				printf("CMD: %s\n", command);
+				#endif
+				
+				fp = popen(command, "r");
+				if (fp == NULL) {
+					fprintf(stderr, "[!] Failed to run '%s'.\n", command);
+					break;
+					//fclose(fwl);
+					//exit(1);
+				}
+				
+				//printf("\tResponse: %s", resp);
+				//printf("\tResponse: %s", resp);
+				if (check_success(fp) == 1) {
+					#ifdef DEBUG
+					printf("[!] GOT!\n");
+					#endif
+					pass_found = 1;
+					break;
+				}
+				
+				//free(tmp_pwd);
+			} else {
+				fprintf(stderr, "Empty password found.\n");
 				exit(1);
 			}
-			
-			//printf("\tResponse: %s", resp);
-			//printf("\tResponse: %s", resp);
-			if (check_success(fp)) {
-				#ifdef DEBUG
-				printf("[!] GOT!\n");
-				#endif
-				break;
-			}
-			
-			//free(tmp_pwd);
 		}
 	}
 	
-	printf("The password is %s", password);
+	if (pass_found) printf("The password is %s\n", password);
 	
 	return 0;
 }

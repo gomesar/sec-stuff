@@ -1,24 +1,26 @@
 /*
  * wordharvest.c
  * 
- * Copyright 2017 A Gomes <agomes@lasca.ic.unicamp.br>
+ * Copyright (c) 2017 A Gomes <agomes@lasca.ic.unicamp.br>
  * 
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
  * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
  * 
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
- * MA 02110-1301, USA.
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  * 
- * wordharvest [-d /tmp/] [-o words_tmp] [opt: -e txt:text:asc]
  */
 
 
@@ -33,8 +35,9 @@
 #define CHECK_CODE 1009
 #define SIZE 4096
 #define BOOK_SIZE 512
+#define PWD_BUFFER_SIZE 127
 //#define DEBUG 1
-#define VERBOSE 1
+//#define VERBOSE 1
 
 
 /*
@@ -48,7 +51,6 @@ char **book[BOOK_SIZE];
 char c = ' ';
 char tmp_word[128];
 short wl_size = 0, b_pages=0;
-void *hack;
 
 
 void usage_error(char* program) {
@@ -136,7 +138,6 @@ int create_book_page() {
 	
 	printf("[!] Creating new book page n %d. (%d entries, %d bytes) \n", b_pages, SIZE, (int) sizeof(wlist));
 	char **page = (char**) malloc(sizeof(wlist) );
-	hack = page;
 	
 	book[b_pages++] = page;
 	#ifdef DEBUG
@@ -167,7 +168,6 @@ int count_word(char* word) {
 	for (i=0; i<b_pages; i++) {
 		#ifdef DEBUG
 		printf("\tStack: %p\n", &wlist);
-		printf("\thack : %p\n", hack);
 		printf("\tpage : %p (%s)\n", book[i], (char*) *book[i]);
 		printf("Looking at Book page %d.\n", i);
 		#endif
@@ -308,7 +308,7 @@ int main(int argc, char **argv) {
 	// Find files
 	FILE *fp;
 	char resp[1024];
-	char command[128];
+	char command[256];
 	char *param_regex = get_regex(extensions);
 	sprintf(command, "find %s -type f %s", find_path, param_regex);
 	free(param_regex);
@@ -330,8 +330,10 @@ int main(int argc, char **argv) {
 		path = strtok(resp, "\n");
 		
 		do {
-			printf("%s\n", path);
-			char buffer[64] = {'\0'};
+			#ifdef VERBOSE
+			printf("\"%s\"\n", path);
+			#endif
+			char buffer[PWD_BUFFER_SIZE] = {'\0'};
 			
 			char c;
 			
@@ -367,7 +369,14 @@ int main(int argc, char **argv) {
 						}
 						// putchar(c);
 					} else {
-						buffer[bf_len] = c;
+						if (bf_len < PWD_BUFFER_SIZE) {
+							buffer[bf_len] = c;
+						} else {
+							fprintf(stderr, "[!] Too large word found!\n");
+							memset(buffer, 0, sizeof buffer);
+							bf_len = 0;
+						}
+						
 					}
 				}
 				
