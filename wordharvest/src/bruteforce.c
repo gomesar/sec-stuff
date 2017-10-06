@@ -47,7 +47,8 @@ int check_success(FILE *response){
 	char skipping_token[9]	= "skipping:";
 	char error_token[18]	= "incorrect password";
 	char success_token[10] 	= "extracting";
-	int s=0, e=0, k=0, success_flag=0;
+	char success_token2[9]	= "inflating";
+	int s=0, e=0, k=0, i=0, success_flag=0;
 	char c;
 	
 	while( (c = getc(response)) != EOF) {
@@ -73,6 +74,13 @@ int check_success(FILE *response){
 			if (k == 10) success_flag = 1;
 		} else {
 			k = 0;
+		}
+		
+		if (c == success_token2[i]) {
+			i++;
+			if (i == 9) success_flag = 1;
+		} else {
+			i = 0;
 		}
 	}
 	
