@@ -1,6 +1,9 @@
 from scapy.all import *
 import hashlib
 import datetime
+import os.path
+import sys
+
 
 class HTTP_Dissector:
     '''
@@ -21,10 +24,14 @@ class HTTP_Dissector:
         }
     '''
 
-    def __init__(self, log=True, test=False):
+    def __init__(self, save_dir="", log=True, test=False):
         self.flows = dict()
         self.log = ""
         self.save_log = log
+        if save_dir != "" and save_dir[-1] != "/":
+            self.save_dir = save_dir + "/"
+        else:
+            self.save_dir = save_dir
 
         if test:
             self.flows["0.0.0.0:99 <> 1.1.1.1:80"] = HTTP_Dissector.new_flow()
@@ -56,21 +63,28 @@ class HTTP_Dissector:
     def new_flow():
         flow = {
             "end-points": {
-                "host": "<IP_HOST>:<PORT_HOST>",
-                "server": "<IP_SERVER>:<PORT_SERVER>"
+                "host": None,
+                "server": None
                     },
-            "method": "<HTTP-METHOD>",
+            "method": None,
             "content": {
-                "name": "DUMMY_CONTENT_NAME",
-                "bytes": b"<FILE_BYTES>",
-                "sha256": "<HASH_SHA256>"
+                "host": {
+                    "name": None,
+                    "bytes": None,
+                    "sha256": None
+                    },
+                "server": {
+                    "name": None,
+                    "bytes": None,
+                    "sha256": None
+                    },
                 },
             "headers": {
                 "host": {
-                    "<REQUEST_HEADER_ITEM>": "<DUMMY>"
+                    "<REQUEST_HEADER_ITEM>": None
                     },
                 "server": {
-                    "Content-Type": "<DUMMY>"
+                    "Content-Type": None
                     }
                 }
             }
@@ -87,6 +101,7 @@ class HTTP_Dissector:
     
         if header_end is not -1:
             header = dict()
+            transferred_file = None
             try:
                 #header_string = str(payload[: header_end + 2]) #  With '\\r\\n'
                 #header = dict( re.findall( r'\\n(?P<name>[\w-]*?): (?P<value>.*?)\\r', header_string ) )
@@ -110,15 +125,21 @@ class HTTP_Dissector:
                         self.add_log("[!] Failed to split '{}'\n".format(i))
 
                 if "Content-Type" in header.keys():
+                    self.add_log("Content found")
                     transferred_file = payload[header_end + 4: ]    #  After '\\r\\n\\r\\n'
     
-                    print("[!] Server Header: {} \tT_File: {}".format(header["HTTP"], len(transferred_file)))
-                    return header, transferred_file
-                elif "User-Agent" in header.keys():
+
+                if "User-Agent" in header.keys():
                     print("[!] Host Header: {}".format(header["HTTP"]))
-                    return header, None
+                    encaps_header = {"host": header}
+                elif "HTTP" in header["HTTP"]:
+                    print("[!] Server Header: {} \tT_File: {}".format(header["HTTP"], len(transferred_file)))
+                    encaps_header = {"server": header}
                 else:
                     print("[!] Header do not contains 'Content-Type' either 'User-Agent'\n\t{}".format(str(header)))
+                    return None, None
+
+                return encaps_header, transferred_file
             except Exception as e:
                 msg = "[!!] Error in 'get_content()'\n\t{}".format(e)
                 print(msg)
@@ -130,29 +151,43 @@ class HTTP_Dissector:
     def save_data(self):
 #        cont = 0
         for k, flow in self.flows.items():
-            if "Content-Enconding" in flow["headers"]["server"].keys():
-                pass
+            #if "Content-Enconding" in flow["headers"]["server"].keys():
+            #    pass
             
-            if "image" in flow["headers"]["server"]["Content-Type"]:
-                pass
+            #if "image" in flow["headers"]["server"]["Content-Type"]:
+            #    pass
             
         
             try:
-                file_name = flow["content"]["name"]
-                content_bytes = flow["content"]["bytes"]    # TODO: unzip
+                for end_point, content in flow["content"].items():
+                    if content["bytes"] is not None:
+                        file_name = content["name"]
+                        content_bytes = content["bytes"]    # TODO: unzip
 
-                sha256 = hashlib.sha256()
-                sha256.update(content_bytes)
-                flow["content"]["sha256"] = sha256.hexdigest()
+                        sha256 = hashlib.sha256()
+                        sha256.update(content_bytes)
+                        content["sha256"] = sha256.hexdigest()
+                        
+                        file_full_path = self.save_dir + file_name
+                        # Duplicates
+                        file_try = file_full_path
+                        cnt = 1
+                        while os.path.exists(file_try):
+                            self.add_log("! '{}' already exists.".format(file_try))
 
-                with open(file_name, "w+b") as f:
-                #with open("dump-object-{}".format(cont), "w+b") as f:
-                    f.write(flow["content"]["bytes"])
-#                    cont += 1
-                self.add_log( "! '{}' succefull extracted.".format(file_name) )
+                            file_try = "{}({})".format(file_full_path, cnt)
+                            cnt += 1
+
+                        file_full_path = file_try
+
+                        # Save
+
+                        with open(file_full_path, "w+b") as f:
+                            f.write(content["bytes"])
+                        self.add_log( "! '{}' succefull extracted.".format(file_full_name) )
 
             except Exception as e:
-                self.add_log( "[!!] Failed to save file '{}'".format(file_name))
+                self.add_log( "[!!] Failed to save file from '{}'\n\t".format(k, e))
 
         if self.save_log:
             with open("log.txt", "a+") as log:
@@ -186,37 +221,55 @@ class HTTP_Dissector:
                 continue
 
             flow_name = self.get_flow_name(s)
-            header, t_file = self.get_content(session_payload)
+            enc_header, t_file = self.get_content(session_payload)
             if flow_name not in self.flows.keys():
                 self.flows[flow_name] = HTTP_Dissector.new_flow()
                 self.add_log( "! New flow: '{}'".format(flow_name))
 
-            if header is not None and t_file is None:
-                # Host -> Server
-                http_splitted = header["HTTP"].split()
-                method = http_splitted[0]
-                file_name = http_splitted[1].split("/")[-1]
+            if enc_header is not None:
+                if "host" in enc_header.keys():
+                    # Host -> Server
+                    header = enc_header["host"]
 
-                self.flows[flow_name]["end-points"]["host"] = flow_name.split()[0]
-                self.flows[flow_name]["method"] = method
-                self.flows[flow_name]["headers"]["host"] = header
-                self.flows[flow_name]["content"]["name"] = file_name
+                    http_splitted = header["HTTP"].split()
+                    method = http_splitted[0]
+                    file_name = http_splitted[1].split("/")[-1]
 
-            elif header is not None:
-                # Server -> Host
-                self.flows[flow_name]["end-points"]["server"] = flow_name.split()[2]
-                self.flows[flow_name]["content"]["bytes"] = t_file
-                self.flows[flow_name]["headers"]["server"] = header
+                    self.flows[flow_name]["end-points"]["host"] = flow_name.split()[0]
+                    self.flows[flow_name]["method"] = method
+                    self.flows[flow_name]["headers"]["host"] = header
+                    self.flows[flow_name]["content"]["server"]["name"] = file_name
 
-                print("########## Packet HTTP header ##########")
-                print("Packet content type: {}".format(header["Content-Type"]) )
-                print("Transfered file: len: {}".format(len(t_file) ) )
-                print("########## ######### ######## ##########\n")
-                #save_data(header, t_file)
+                    if t_file is not None:
+                        self.flows[flow_name]["content"]["host"]["name"] = "{}_req".format(file_name)
+                        self.flows[flow_name]["content"]["host"]["bytes"] = t_file
+
+                elif "server" in  enc_header.keys():
+                    # Server -> Host
+                    header = enc_header["server"]
+
+                    self.flows[flow_name]["end-points"]["server"] = flow_name.split()[2]
+                    self.flows[flow_name]["headers"]["server"] = header
+    
+                    if t_file is not None:
+                        self.flows[flow_name]["content"]["server"]["bytes"] = t_file
+
+                    print("########## Packet HTTP header ##########")
+                    print("Packet content type: {}".format(header["Content-Type"]) )
+                    print("Transfered file: len: {}".format(len(t_file) ) )
+                    print("########## ######### ######## ##########\n")
+                    #save_data(header, t_file)
             else:
                 print(": No header\n")
                 self.add_log("[!] No header")
     
         self.save_data()
     
-    
+
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        print("Usage:\n\tpython3 http-dissector.py file.pcap")
+    else:
+        dissector = HTTP_Dissector()
+        dissector.parser_http(sys.argv[1])
+
